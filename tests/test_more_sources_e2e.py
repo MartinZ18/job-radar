@@ -184,6 +184,20 @@ class MoreSourcesE2E(unittest.TestCase):
         self.assertEqual({n: e["fallas"] for n, e in health.items()},
                          {"Himalayas": 0, "Jobicy": 0, "Remotive": 0, "Working Nomads": 0, "We Work Remotely": 0})
 
+    def test_title_noise_is_filtered(self):
+        noise = ["Cryptography Specialist for AI lab", "Freelance Mechanical CFD Engineer - AI Trainer",
+                 "Remote Industrial Automation Consultant", "Booster AI Mentor", "Software Engineer Interviewer"]
+        keep = ["AI Engineer", "Desarrollador IA Junior", "AI Automation Expert (n8n / Make / Zapier / AI Agents)",
+                "Ingeniero de IA trainee", "Plataforma de e-commerce con IA", "Desenvolvedor IA & Automações remoto",
+                "Junior Python Developer"]
+        pages = {("python", 1): [him(f"t{i}", t, []) for i, t in enumerate(noise + keep)]}
+        # A body that mentions mentoring must not sink a good posting: title-only exclusions.
+        pages[("python", 1)][-1]["description"] = "<p>Python APIs. Vas a tener mentoría y un mentor asignado.</p>"
+        with mock.patch.dict(HIM_PAGES, pages, clear=True):
+            self.run_chain()
+        titles = {t for (src, t) in self.rows() if src == "Himalayas"}
+        self.assertEqual(titles, set(keep))
+
     def test_second_run_adds_nothing(self):
         self.run_chain()
         before = self.rows()

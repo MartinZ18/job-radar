@@ -93,6 +93,7 @@ class RelevanceFilter:
     def __init__(self, cfg: dict):
         self.tech = _compile(cfg.get("tech", []))
         self.exclude = _compile(cfg.get("exclude", []))
+        self.exclude_title = _compile(cfg.get("exclude_title", []))  # title only, unlike `exclude`
         self.exclude_levels = {s.lower() for s in cfg.get("exclude_levels", [])}
         internship = cfg.get("internship", {})
         self.internship_title = _compile(internship.get("title", []))
@@ -135,7 +136,7 @@ class RelevanceFilter:
         if self.is_internship(job):
             return self._internship_fits(job)
         text = f"{job.titulo}\n{job.resumen}"
-        if any(p.search(text) for p in self.exclude):
+        if any(p.search(text) for p in self.exclude) or any(p.search(job.titulo) for p in self.exclude_title):
             return False
         return any(p.search(job.titulo) for p in self.tech) and self._reachable(job, text)
 

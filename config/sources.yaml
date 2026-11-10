@@ -120,7 +120,11 @@ filter:
     - '\bbackend\b|\bback[- ]end\b|full[- ]?stack'
     - '\bpython\b|\bfastapi\b|\bdjango\b|\bflask\b'
     - '\bjava\b|spring boot'
-    - '\b(ia|ai)\b|\bllm\b|\brag\b'
+    # Spanish/Portuguese "IA" qualifies on its own ("Plataforma de e-commerce con IA").
+    # English "AI" alone let in anything ("Cryptography Specialist for AI lab"): it needs a role next to it.
+    - '\bia\b|\bllm\b|\brag\b'
+    - '\bai\b.{0,30}\b(engineer|developer|automation|agents?|integration)'
+    - '\b(engineer|developer)\b.{0,30}\bai\b'
     - '\bapis?\b'
     - 'developer|desarrollador|programador|software engineer|ingenier[oa] de software|\bsre\b|devops'
   exclude_levels: [Senior, Experto]
@@ -147,6 +151,10 @@ filter:
     - 'front[- ]?end developer|\bui/ux\b|dise[nñ]ador|designer|\bqa\b|data (entry|analyst|scientist)|business intelligence|power bi'
     - 'contact center|voice (artist|actor|recording)|annotat|grabaci[oó]n|filmmaker|procurement|merchandising|assistant|sales|marketing|manager|director'
     - 'don.t see an open position|mobile|android|ios developer|flutter'
+  # Checked against the TITLE only: a body saying "vas a tener un mentor" must not sink a posting.
+  exclude_title:
+    - 'mechanical|\bcivil\b|chemical|\bcfd\b|industrial|electrical engineer'   # engineering, not software
+    - '\btrainer\b|\btutor\b|mentor|interviewer|evaluator|\brater\b'           # AI-training and interviewing gigs
 
   # Internships skip `tech` and `exclude`: their titles rarely name a technology
   # and their bodies mention senior mentors. A posting is an internship when its
