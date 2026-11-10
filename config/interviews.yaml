@@ -1,0 +1,98 @@
+# Interview radar: where to look for "what do they ask / what do they make you
+# build" posts, and how to classify what is found. See scripts/fetch_interviews.py.
+
+sources:
+  - name: Hacker News
+    type: hn
+    queries:
+      - "backend interview questions"
+      - "live coding interview"
+      - "take home assignment backend"
+      - "junior developer interview"
+      - "python interview"
+    hits_per_query: 20
+    comment_queries:            # comments are where people write "they asked me to..."
+      - "backend interview they asked"
+      - "live coding interview asked me"
+      - "take home assignment backend api"
+      - "junior interview asked"
+    comments_per_query: 30
+    enabled: true
+
+  - name: dev.to
+    type: devto
+    tags: [interview, careers, spanish]
+    per_tag: 30
+    enabled: true
+
+  - name: n8n Community
+    type: discourse
+    base_url: https://community.n8n.io
+    queries:
+      - "interview questions"
+      - "hiring test"
+      - "technical assessment"
+      - "entrevista"
+      - "prueba técnica"
+    enabled: true
+
+  - name: Reddit
+    type: reddit_rss           # public RSS, no OAuth; rate-limited, so few queries and a long delay
+    delay_seconds: 12
+    subreddits:
+      devsarg: ["entrevista", "live coding", "prueba técnica", "me preguntaron"]
+      programacion: ["entrevista técnica", "prueba técnica", "entrevista junior"]
+      desarrolloweb: ["entrevista"]
+      argentina: ["entrevista programador"]
+      cscareerquestions: ["backend interview", "junior interview questions", "take home"]
+      learnprogramming: ["interview questions", "technical interview"]
+    enabled: true
+
+http:
+  user_agent: "job-radar/0.1 (personal interview-prep research)"
+  delay_seconds: 4
+  timeout_seconds: 25
+
+# Only posts that look like interview talk reach the LLM (saves tokens).
+prefilter:
+  - "interview|entrevista"
+  - "pregunt|question|asked|pidieron|live ?coding|pair programming|take[- ]?home|challenge|prueba|desaf[ií]o|assessment|assignment|round|test"
+
+llm:
+  provider: groq
+  model: openai/gpt-oss-120b
+  posts_per_call: 4          # posts batched into one completion
+  max_posts_per_run: 40      # keeps a run inside Groq's free daily budget
+  body_chars: 1500           # per post, before sending
+  delay_seconds: 3           # between calls (free tier: ~30 req/min, 12k tokens/min)
+  source_priority:           # richer / Spanish sources are processed first when the queue exceeds the budget
+    - Reddit r/devsarg
+    - Reddit r/programacion
+    - Reddit r/desarrolloweb
+    - Reddit r/argentina
+    - Reddit
+    - Hacker News (comentarios)
+    - n8n Community
+    - dev.to
+    - Hacker News
+
+# Fixed vocabularies. The LLM must pick from these; anything else is mapped to "Otro".
+tipos: [pregunta, livecoding, proyecto, comportamental]
+secciones:
+  - Backend y APIs
+  - Python
+  - Java y Spring
+  - SQL y bases de datos
+  - IA y LLM
+  - Automatización n8n
+  - Infraestructura y deploy
+  - Algoritmos y estructuras de datos
+  - Comportamental
+  - Otro
+
+obsidian:
+  vault_dir: obsidian_vault/Entrevistas-IA-Backend
+  folder: Radar                 # generated notes live here; nothing else in the vault is modified
+  index_note: 00 Índice.md      # one link line is added under "## Notas" if missing
+  min_veces_destacado: 2        # items seen in 2+ posts are marked as frequent
+  idiomas: [es, en-bajo]        # only these language contexts reach the notes; [] shows everything

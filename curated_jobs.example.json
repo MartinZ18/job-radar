@@ -1,0 +1,13 @@
+[
+  {
+    "titulo": "Pasante de Desarrollo Backend",
+    "empresa": "Empresa de ejemplo",
+    "link": "https://example.com/aviso-123",
+    "modalidad": "Híbrido",
+    "ubicacion": "Buenos Aires",
+    "nivel": "Pasantía",
+    "stack": "Python, SQL",
+    "estado_postulacion": "No postulado",
+    "notas": "Visto en LinkedIn; pide GitHub con un proyecto propio."
+  }
+]

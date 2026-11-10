@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Your data: the tracker, everything the radar stores, and what it writes to the vault
+*.xlsx
+~$*.xlsx
+data/
+obsidian_vault/**/.obsidian/
+obsidian_vault/**/Radar/
+obsidian_vault/**/Vacantes/

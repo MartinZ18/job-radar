@@ -1,0 +1,134 @@
+# Job sources and relevance filter for job-radar.
+# Add a new source here; the code does not need to change unless it is a new `type`.
+
+sources:
+  - name: n8n Community (Jobs)          # must match the "Fuente" values used in the tracker
+    type: rss
+    url: https://community.n8n.io/c/jobs/13.rss
+    enabled: true
+
+  - name: python.org.ar/trabajo
+    type: pyar_html
+    url: https://www.python.org.ar/trabajo/
+    enabled: true
+
+  - name: Get on Board
+    type: getonbrd            # public API v0, no key needed
+    queries: ["python junior", "backend junior", "n8n", "automatización", "trainee desarrollador",
+              "pasantía", "practicante", "trainee", "intern"]
+    per_query: 20
+    enabled: true
+
+  - name: Remote OK
+    type: remoteok            # public API; mostly English, so the relevance filter does the work
+    tags: ["python", "backend"]
+    enabled: true
+
+  - name: Becas IT
+    type: becasit_html        # internships from a staffing firm, all on one page
+    url: https://becasit.itechcareer.com/pasant%C3%ADas
+    enabled: true
+
+  - name: Selección manual
+    type: curated             # checked by hand on sites the radar cannot read
+    path: data/curated_jobs.json
+    enabled: true
+
+  # Computrabajo / Indeed / Talent / Laborum / WeRemoto / Torre: no public API or RSS
+  # (checked 2026-09); HTML parsing breaks often and their terms discourage it. Use email alerts.
+  # LinkedIn: never scraped on purpose. Use saved-search email alerts and
+  # `python scripts/update_excel.py --manual` to load what matters.
+
+http:
+  # Identify yourself: sites block anonymous scrapers. Put your repo or contact URL here.
+  user_agent: "job-radar/0.1 (personal job tracker)"
+  delay_seconds: 2          # pause between requests to the same host
+  timeout_seconds: 20
+
+# A source that brings 0 postings (or fails) this many runs in a row is reported
+# once by Telegram, and again when it comes back. 3 runs = one week (Mon/Wed/Fri).
+# "curated" sources never count: an empty hand-picked list is normal.
+health:
+  max_fallas: 3
+
+filter:
+  # A posting is kept when its TITLE matches a `tech` pattern (it is a software
+  # job), nothing in title+body matches `exclude`, its level is not in
+  # `exclude_levels`, and it is not on-site or hybrid outside `home`. A posting
+  # that does not state its modality stays, whatever city it names. "junior" alone does not qualify a posting: general boards
+  # would flood the tracker with "Junior Designer". Case-insensitive regexes.
+  tech:
+    - '\bn8n\b'
+    - 'automatizaci[oó]n|automatizador|\bautomation\b'
+    - '\bbackend\b|\bback[- ]end\b|full[- ]?stack'
+    - '\bpython\b|\bfastapi\b|\bdjango\b|\bflask\b'
+    - '\bjava\b|spring boot'
+    - '\b(ia|ai)\b|\bllm\b|\brag\b'
+    - '\bapis?\b'
+    - 'developer|desarrollador|programador|software engineer|ingenier[oa] de software|\bsre\b|devops'
+  exclude_levels: [Senior, Experto]
+  # Where you can go on-site or hybrid (regexes matched against location + text).
+  # Empty: only remote postings, or those that do not state their modality, are kept.
+  # Example: ['mendoza', 'godoy cruz']
+  home: []
+  exclude:
+    - '\[for hire\]'          # n8n Community: freelancers offering services, not job posts
+    - '\bfor hire\b'
+    - '^how to\b'                       # forum discussions, not postings
+    - 'looking to connect'
+    - '(?<!semi[- ])(?<!semi)senior'   # senior, but not semi senior / semi-senior
+    - '\bsr\.? \w+ (developer|engineer)'
+    - '\blead\b'
+    - '\bstaff\b'
+    - '\bprincipal\b'
+    - '\barchitect\b'
+    - 'front[- ]?end developer|\bui/ux\b|dise[nñ]ador|designer|\bqa\b|data (entry|analyst|scientist)|business intelligence|power bi'
+    - 'contact center|voice (artist|actor|recording)|annotat|grabaci[oó]n|filmmaker|procurement|merchandising|assistant|sales|marketing|manager|director'
+    - 'don.t see an open position|mobile|android|ios developer|flutter'
+
+  # Internships skip `tech` and `exclude`: their titles rarely name a technology
+  # and their bodies mention senior mentors. A posting is an internship when its
+  # title matches `title` or Get on Board labels it so. It is kept when the title
+  # does not match `exclude_title`, title+body match `software`, and the same
+  # location rule holds.
+  internship:
+    title:
+      - '\bpasante\b|\bpasant[ií]as?\b|\bpracticante\b|pr[aá]ctica profesional|\btrainee\b|\binterns?\b|\binternship\b|\bbecari[oa]\b'
+    software:
+      - 'desarroll|software|programaci|programador|developer|python|\bjava\b|backend|back[- ]end|full[- ]?stack'
+      - 'sistemas|inform[aá]tica|\bsql\b|\bdatos\b|\bdata\b|\b(ia|ai)\b|automatizaci|\bn8n\b|devops|\bapis?\b'
+    exclude_title:
+      - 'comercial|account|sales|ventas|marketing|rrhh|recursos humanos|administrativ|corretaje|contable|legal|cocina'
+      - 'industrial|telecomunicaciones|help desk|\bsena\b'
+
+# Vocabulary used to fill the "Stack" column when the source has no tags.
+stack_vocabulary:
+  - n8n
+  - Make
+  - Zapier
+  - Python
+  - FastAPI
+  - Django
+  - Flask
+  - Java
+  - Spring Boot
+  - Node
+  - TypeScript
+  - Docker
+  - Kubernetes
+  - PostgreSQL
+  - MySQL
+  - MongoDB
+  - Supabase
+  - OpenAI
+  - ChatGPT
+  - Claude
+  - Gemini
+  - LangChain
+  - RAG
+  - LLM
+  - APIs
+  - webhooks
+  - AWS
+  - GCP
+  - Azure
