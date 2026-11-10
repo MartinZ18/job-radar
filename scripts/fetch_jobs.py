@@ -15,7 +15,7 @@ import json
 import re
 import sys
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import urljoin
 
@@ -81,34 +81,156 @@ def _fmt_date(dt: datetime | None) -> str:
 # ---------- source: generic RSS (n8n Community Jobs is a Discourse feed) ----------
 
 def fetch_rss(source: dict, http: Http, vocabulary: list[str]) -> list[Job]:
-    feed = feedparser.parse(http.get(source["url"]))
+    """One or more feeds (`url` or `urls`). Options: `company_in_title` splits
+    "Company: Title" (We Work Remotely); `modalidad` fixes the modality. The
+    feed's <country> or <region>, when present, becomes the location."""
     jobs: list[Job] = []
-    for entry in feed.entries:
-        title = clean_text(entry.get("title", ""), 200)
-        body = clean_text(entry.get("summary", "") or entry.get("description", ""))
-        text = f"{title} {body}"
-        published = None
-        if entry.get("published"):
-            try:
-                published = parsedate_to_datetime(entry["published"])
-            except (TypeError, ValueError):
-                published = None
-        author = entry.get("author") or entry.get("dc_creator")
-        jobs.append(
-            Job(
-                titulo=title,
-                empresa=f"{NOT_SPECIFIED_F} (publica: {author})" if author else NOT_SPECIFIED_F,
-                fuente=source["name"],
-                link=entry.get("link", ""),
-                modalidad=infer_modalidad(text),
-                ubicacion=NOT_SPECIFIED,
-                nivel=infer_nivel(text),
-                stack=infer_stack(text, vocabulary),
-                compensacion=infer_compensacion(text),
-                fecha_publicacion=_fmt_date(published),
-                resumen=body,
+    links: set[str] = set()
+    for url in source.get("urls") or [source["url"]]:
+        feed = feedparser.parse(http.get(url))
+        for entry in feed.entries:
+            title = clean_text(entry.get("title", ""), 200)
+            body = clean_text(entry.get("summary", "") or entry.get("description", ""))
+            text = f"{title} {body}"
+            published = None
+            if entry.get("published"):
+                try:
+                    published = parsedate_to_datetime(entry["published"])
+                except (TypeError, ValueError):
+                    published = None
+            author = entry.get("author") or entry.get("dc_creator")
+            empresa = f"{NOT_SPECIFIED_F} (publica: {author})" if author else NOT_SPECIFIED_F
+            if source.get("company_in_title") and ": " in title:
+                empresa, title = (part.strip() for part in title.split(": ", 1))
+            link = entry.get("link", "")
+            if link in links:
+                continue
+            links.add(link)
+            jobs.append(
+                Job(
+                    titulo=title,
+                    empresa=empresa,
+                    fuente=source["name"],
+                    link=link,
+                    modalidad=source.get("modalidad") or infer_modalidad(text),
+                    ubicacion=clean_text(entry.get("country") or entry.get("region") or "", 150) or NOT_SPECIFIED,
+                    nivel=infer_nivel(text),
+                    stack=infer_stack(text, vocabulary),
+                    compensacion=infer_compensacion(text),
+                    fecha_publicacion=_fmt_date(published),
+                    resumen=body,
+                )
             )
-        )
+    return jobs
+
+
+# ---------- source: generic JSON API (Himalayas, Jobicy, Remotive, Working Nomads) ----------
+# Declared entirely in sources.yaml: `url`, optional `params`, `queries` +
+# `query_param`, paging by `page_param` or by `cursor_field` + `cursor_param`
+# (up to `pages` pages per query), `items` (dotted path to the list; omit when
+# the response is the list), and `fields` mapping Job fields to item keys.
+
+def _pick(data, path: str):
+    for part in path.split("."):
+        if not isinstance(data, dict):
+            return None
+        data = data.get(part)
+    return data
+
+
+def _as_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(v) for v in value if v not in (None, ""))
+    return str(value)
+
+
+def _parse_date(value) -> datetime | None:
+    """Epoch seconds or milliseconds, ISO 8601 (with or without zone) or RFC 822."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)) or (isinstance(value, str) and value.strip().isdigit()):
+        ts = float(value)
+        return datetime.fromtimestamp(ts / 1000 if ts > 1e11 else ts, tz=timezone.utc)
+    text = str(value).strip()
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        pass
+    try:
+        return parsedate_to_datetime(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def _level(value: str, text: str) -> str:
+    """Map an API's own level ("Senior", ["Entry-level"], "Any") to the tracker's."""
+    v = value.lower()
+    if re.search(r"senior|\blead\b|staff|principal|expert|director", v):
+        return "Senior"
+    if re.search(r"\bmid\b|mid-level|intermediate", v):
+        return "Semi-junior / Mid"
+    if re.search(r"junior|entry|intern|trainee|graduate", v):
+        return "Junior"
+    return infer_nivel(text)
+
+
+def _json_job(item: dict, source: dict, vocabulary: list[str]) -> Job | None:
+    fields = source["fields"]
+
+    def field(name: str) -> str:
+        return _as_text(_pick(item, fields[name])) if fields.get(name) else ""
+
+    titulo = clean_text(field("titulo"), 200)
+    if not titulo:
+        return None
+    resumen = clean_text(field("resumen"))
+    text = f"{titulo} {resumen}"
+    return Job(
+        titulo=titulo,
+        empresa=clean_text(field("empresa"), 100) or NOT_SPECIFIED_F,
+        fuente=source["name"],
+        link=field("link").strip(),
+        modalidad=source.get("modalidad") or infer_modalidad(text),
+        ubicacion=clean_text(field("ubicacion"), 150) or NOT_SPECIFIED,
+        nivel=_level(field("nivel"), text),
+        stack=infer_stack(text, vocabulary),
+        compensacion=infer_compensacion(text),
+        fecha_publicacion=_fmt_date(_parse_date(_pick(item, fields["fecha"]) if fields.get("fecha") else None)),
+        resumen=resumen,
+    )
+
+
+def fetch_json(source: dict, http: Http, vocabulary: list[str]) -> list[Job]:
+    jobs: list[Job] = []
+    links: set[str] = set()
+    pages = max(1, int(source.get("pages", 1)))
+    for query in source.get("queries") or [None]:
+        params = dict(source.get("params") or {})
+        if query is not None:
+            params[source["query_param"]] = query
+        cursor = None
+        for page in range(1, pages + 1):
+            if source.get("page_param"):
+                params[source["page_param"]] = page
+            if cursor:
+                params[source["cursor_param"]] = cursor
+            data = http.get_json(source["url"], dict(params))
+            items = _pick(data, source["items"]) if source.get("items") else data
+            if not isinstance(items, list) or not items:
+                break  # an empty page ends this query
+            for item in items:
+                job = _json_job(item, source, vocabulary) if isinstance(item, dict) else None
+                if job and job.link not in links:
+                    links.add(job.link)
+                    jobs.append(job)
+            if source.get("cursor_field"):
+                cursor = _pick(data, source["cursor_field"])
+                if not cursor:
+                    break
+            elif not source.get("page_param"):
+                break  # no paging declared: one request per query
     return jobs
 
 
@@ -279,6 +401,7 @@ def fetch_curated(source: dict, http: Http, vocabulary: list[str]) -> list[Job]:
 
 FETCHERS = {
     "rss": fetch_rss,
+    "json": fetch_json,
     "pyar_html": fetch_pyar,
     "getonbrd": fetch_getonbrd,
     "remoteok": fetch_remoteok,
@@ -324,7 +447,11 @@ def main() -> int:
         if tracked:
             record_source_run(health, source["name"], len(found), "", today)
         new = [j for j in found if not j.is_seen(seen)]
-        kept = new if args.all or source["type"] == "curated" else [j for j in new if relevance.is_relevant(j)]
+        if args.all or source["type"] == "curated":
+            kept = new
+        else:
+            located = source.get("location_filter", False)
+            kept = [j for j in new if relevance.is_relevant(j) and (not located or relevance.accepts_location(j))]
         print(f"[{source['name']}] {len(found)} fetched, {len(new)} unseen, {len(kept)} relevant")
         for job in kept:  # a board can return the same posting under two queries/tags
             if not job.is_seen(seen):

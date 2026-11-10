@@ -99,6 +99,15 @@ class RelevanceFilter:
         self.internship_software = _compile(internship.get("software", []))
         self.internship_exclude = _compile(internship.get("exclude_title", []))
         self.home = _compile(cfg.get("home", []))
+        self.remote_from = _compile(cfg.get("remote_from", []))
+
+    def accepts_location(self, job: Job) -> bool:
+        """For sources with `location_filter`: a remote posting restricted to
+        some countries is kept only if one of them matches `remote_from`.
+        No stated restriction means anywhere."""
+        if job.ubicacion.strip() in ("", NOT_SPECIFIED) or not self.remote_from:
+            return True
+        return any(p.search(job.ubicacion) for p in self.remote_from)
 
     def is_internship(self, job: Job) -> bool:
         return INTERNSHIP.lower() in job.modalidad.lower() or any(p.search(job.titulo) for p in self.internship_title)

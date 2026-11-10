@@ -34,6 +34,63 @@ sources:
     path: data/curated_jobs.json
     enabled: true
 
+  # ----- remote boards (verified 2026-11, no key). `location_filter` drops postings
+  # restricted to countries that do not match filter.remote_from. -----
+
+  - name: Himalayas
+    type: json                # search API: 20 per page, ?page=N
+    url: https://himalayas.app/jobs/api/search
+    queries: ["python", "backend", "n8n", "automation", "junior developer"]
+    query_param: q
+    page_param: page
+    pages: 2
+    items: jobs
+    modalidad: Remoto
+    location_filter: true
+    fields: {titulo: title, empresa: companyName, link: guid, resumen: description,
+             fecha: pubDate, ubicacion: locationRestrictions, nivel: seniority}
+    enabled: true
+
+  - name: Jobicy
+    type: json                # terms: credit Jobicy with a link (the tracker keeps it); at most hourly
+    url: https://jobicy.com/api/v2/remote-jobs
+    params: {count: 50, tag: python}
+    items: jobs
+    modalidad: Remoto
+    location_filter: true
+    fields: {titulo: jobTitle, empresa: companyName, link: url, resumen: jobExcerpt,
+             fecha: pubDate, ubicacion: jobGeo, nivel: jobLevel}
+    enabled: true
+
+  - name: Remotive
+    type: json                # terms: max 4 requests a day, link back to Remotive; jobs come 24 h late
+    url: https://remotive.com/api/remote-jobs
+    params: {category: software-dev, limit: 100}
+    items: jobs
+    modalidad: Remoto
+    location_filter: true
+    fields: {titulo: title, empresa: company_name, link: url, resumen: description,
+             fecha: publication_date, ubicacion: candidate_required_location}
+    enabled: true
+
+  - name: Working Nomads
+    type: json                # the response is the list itself; "location" is a time zone, so no location filter
+    url: https://www.workingnomads.com/api/exposed_jobs/
+    modalidad: Remoto
+    fields: {titulo: title, empresa: company_name, link: url, resumen: description,
+             fecha: pub_date, ubicacion: location}
+    enabled: true
+
+  - name: We Work Remotely
+    type: rss
+    urls:
+      - https://weworkremotely.com/categories/remote-back-end-programming-jobs.rss
+      - https://weworkremotely.com/categories/remote-full-stack-programming-jobs.rss
+    company_in_title: true    # titles come as "Company: Title"
+    modalidad: Remoto
+    location_filter: true
+    enabled: true
+
   # Computrabajo / Indeed / Talent / Laborum / WeRemoto / Torre: no public API or RSS
   # (checked 2026-09); HTML parsing breaks often and their terms discourage it. Use email alerts.
   # LinkedIn: never scraped on purpose. Use saved-search email alerts and
@@ -71,6 +128,11 @@ filter:
   # Empty: only remote postings, or those that do not state their modality, are kept.
   # Example: ['mendoza', 'godoy cruz']
   home: []
+  # Sources with `location_filter`: a remote posting that names the countries it
+  # accepts is kept only if one matches. No restriction stated = kept.
+  remote_from:
+    - 'argentin|latam|latin america|latinoam[eé]rica|am[eé]rica latina|south america|sudam[eé]rica'
+    - '\bamericas\b|worldwide|anywhere|global|no restriction|sin restricci[oó]n'
   exclude:
     - '\[for hire\]'          # n8n Community: freelancers offering services, not job posts
     - '\bfor hire\b'

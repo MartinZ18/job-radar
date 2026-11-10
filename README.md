@@ -1,8 +1,8 @@
 # job-radar
 
-Radar personal de búsqueda laboral para perfiles junior / trainee de backend, IA y automatización. Corre solo en tu PC (Windows + Task Scheduler) y:
+Radar personal de búsqueda laboral para perfiles junior / trainee de backend, IA y automatización. Corre solo en tu PC (Windows con Task Scheduler, o Linux/macOS con cron) y:
 
-- **baja vacantes nuevas** de bolsas con API o RSS (Get on Board, Remote OK, n8n Community, python.org.ar, Becas IT), filtra las que encajan con tu perfil y las agrega a un **tracker en Excel** sin pisar lo que ya cargaste;
+- **baja vacantes nuevas** de 10 bolsas con API o RSS (Get on Board, Himalayas, We Work Remotely, Remote OK, Remotive y otras), filtra las que encajan con tu perfil y desde dónde aceptan candidatos, y las agrega a un **tracker en Excel** sin pisar lo que ya cargaste;
 - crea una **nota en Obsidian por vacante**, con una checklist de preparación;
 - te avisa por **Telegram** de las vacantes nuevas, de un resumen semanal y de cualquier **fuente que deje de andar**;
 - arma un **radar de entrevistas**: lee foros (HN, dev.to, n8n, Reddit), un LLM (Groq, free tier) extrae preguntas técnicas, live coding y proyectos que se valoran, y lo cruza con lo que piden tus vacantes.
@@ -11,27 +11,41 @@ Es un proyecto personal: no hay servidor ni base de datos, los datos son tuyos y
 
 ## Empezar de cero
 
-Requisitos: Windows, Python 3.11 o superior y, si querés las notas, [Obsidian](https://obsidian.md).
+Requisitos: Python 3.11 o superior y, si querés las notas, [Obsidian](https://obsidian.md).
 
 ```bat
 git clone <este repo> job-radar
 cd job-radar
 pip install -r requirements.txt
 
-python scripts\create_tracker.py          :: crea tracker_vacantes_ia_backend.xlsx vacío
-copy .env.example .env                    :: completá Telegram y Groq (opcional, ver abajo)
+python radar.py setup                     :: crea el tracker, el .env y el vault; te dice qué falta completar
 python scripts\fetch_jobs.py --dry-run    :: muestra qué agregaría, sin escribir nada
-run_radar.bat                             :: la cadena completa; log en data\radar.log
+python radar.py run                       :: la cadena completa
+python radar.py setup --schedule          :: que corra solo (tareas de Windows; en Linux/macOS imprime el cron)
 ```
 
 Antes de la primera corrida real, ajustá `config/sources.yaml` a tu perfil:
 
 - `filter.home`: dónde podés ir presencial o híbrido (por ejemplo `['mendoza']`). Vacío = solo remoto o avisos que no aclaran modalidad.
+- `filter.remote_from`: desde dónde postulás a remotos (por defecto Argentina, LATAM y Worldwide).
 - `filter.tech` / `filter.exclude`: qué títulos cuentan como tu perfil y cuáles no.
 - `sources`: qué fuentes y consultas usar; cada una se puede desactivar con `enabled: false`.
 - `http.user_agent`: poné tu repo o un contacto; los sitios bloquean scrapers anónimos.
 
-`create_tracker.py` nunca pisa un tracker que ya existe. Si ya tenés el tuyo, usalo con las mismas 13 columnas de la hoja **Vacantes**.
+`setup` nunca pisa nada que ya exista: ni el tracker, ni el `.env`, ni tus notas. Si ya tenés tu propio tracker, usalo con las mismas 13 columnas de la hoja **Vacantes**.
+
+## Uso
+
+```bat
+python radar.py run          :: fetch → Excel → notas → Telegram
+python radar.py weekly       :: resumen semanal por Telegram + radar de entrevistas
+python radar.py interviews   :: solo el radar de entrevistas
+python radar.py status       :: tracker, última corrida, salud de cada fuente, qué falta configurar
+```
+
+`--log` (en `run`, `weekly` e `interviews`) manda la salida a `data\radar.log`, que rota a `radar.log.1` al pasar 1 MB; es lo que usan las tareas programadas. `status` nunca muestra tokens ni claves: solo dice si están.
+
+Si el tracker está abierto en Excel cuando corre `run`, no se agrega nada, te llega un aviso por Telegram para que lo cierres y las mismas vacantes entran en la corrida siguiente.
 
 ## Fuentes
 
@@ -43,10 +57,39 @@ Antes de la primera corrida real, ajustá `config/sources.yaml` a tu perfil:
 | Remote OK | API pública (JSON), por tags |
 | Becas IT | HTML de la página de pasantías |
 | Selección manual | `data/curated_jobs.json`: avisos que cargás vos |
+| Himalayas | API de búsqueda (JSON), 5 consultas × 2 páginas |
+| Jobicy | API (JSON), tag `python`; pide citar la fuente y no consultar más de una vez por hora |
+| Remotive | API (JSON), categoría software; máx. 4 consultas por día, avisos con 24 h de demora |
+| Working Nomads | API (JSON) |
+| We Work Remotely | RSS de backend y full-stack |
+
+Las bolsas remotas tienen `location_filter: true`: si el aviso dice desde qué países acepta candidatos, se guarda solo si alguno matchea `filter.remote_from`. Si no dice nada, se guarda.
+
+### Sumar una bolsa sin escribir código
+
+Si la bolsa tiene RSS, alcanza con `type: rss` y su `url` (o `urls`, para varios feeds). Si tiene una API JSON, `type: json` se configura entero en `sources.yaml`:
+
+```yaml
+- name: Mi bolsa
+  type: json
+  url: https://ejemplo.com/api/jobs
+  params: {category: dev}            # fijos en cada pedido
+  queries: ["python", "backend"]     # opcional: un pedido por consulta...
+  query_param: q                     # ...en este parámetro
+  page_param: page                   # paginación por número (o cursor_field + cursor_param)
+  pages: 2                           # tope de páginas por consulta; una página vacía corta antes
+  items: data.jobs                   # dónde está la lista (omitir si la respuesta es la lista)
+  modalidad: Remoto
+  location_filter: true
+  fields: {titulo: title, empresa: company, link: url, resumen: description,
+           fecha: published_at, ubicacion: countries, nivel: seniority}
+```
+
+Las fechas pueden venir como epoch, ISO 8601 o RFC 822; las listas se unen con comas. El aviso de fuente rota también cubre a las fuentes nuevas.
 
 Sin API ni RSS (verificado 2026-09): Computrabajo, Indeed, Talent, Laborum, WeRemoto, Torre, Jooble sin key: usá sus alertas por email. LinkedIn no se scrapea a propósito.
 
-## Cómo correrlo a mano
+## Pasos sueltos
 
 ```bat
 python scripts\fetch_jobs.py               :: deja las nuevas en data\pending_jobs.json
@@ -54,7 +97,7 @@ python scripts\update_excel.py             :: las agrega al Excel y las marca co
 python scripts\update_excel.py --manual    :: cargar una vacante a mano (por ejemplo, de una alerta de LinkedIn)
 ```
 
-O todo junto: `run_radar.bat` (fetch → Excel → notas en Obsidian → Telegram). El Excel tiene que estar cerrado mientras corre `update_excel.py`. Los `.bat` usan el lanzador `py` o `python` del PATH; para forzar otro (por ejemplo, el de un virtualenv), definí la variable `PY` con la ruta a `python.exe`.
+Los `.bat` que usan las tareas programadas llaman a `radar.py` con el lanzador `py` o `python` del PATH; para forzar otro (por ejemplo, el de un virtualenv), definí la variable `PY` con la ruta a `python.exe`.
 
 ## Cómo decide qué agregar
 
@@ -98,7 +141,7 @@ update_obsidian.py    → Radar\Preguntas técnicas · Live coding · Proyectos 
 - Si Groq falla, las notas se regeneran igual con los ítems ya guardados.
 - X/Twitter y LinkedIn no se consultan: API paga o scraping prohibido. Reddit va por RSS público y a veces devuelve 429; esa consulta se reintenta la próxima vez.
 
-Corre los viernes dentro de `run_weekly.bat`; a mano, `run_interviews.bat`.
+Corre los viernes dentro de `radar.py weekly`; a mano, `python radar.py interviews`.
 
 ## Aviso por Telegram
 
@@ -122,10 +165,7 @@ Sin `.env` el radar sigue actualizando el Excel; solo salta el aviso (queda en e
 
 ## Tareas programadas
 
-```bat
-schtasks /Create /F /TN job-radar /TR "C:\ruta\job-radar\run_radar.bat" /SC WEEKLY /D MON,WED,FRI /ST 09:00
-schtasks /Create /F /TN job-radar-weekly /TR "C:\ruta\job-radar\run_weekly.bat" /SC WEEKLY /D FRI /ST 18:00
-```
+`python radar.py setup --schedule` crea estas dos tareas en Windows; en Linux/macOS imprime las líneas equivalentes para `crontab -e`.
 
 | Tarea | Cuándo | Corre |
 |---|---|---|
@@ -147,8 +187,9 @@ python -m unittest discover -s tests -t .
 ```
 config/sources.yaml            fuentes, filtro, vocabulario de stack, umbral de fuentes rotas
 config/interviews.yaml         radar de entrevistas: fuentes, LLM, secciones, idiomas
+radar.py                       punto de entrada: setup, run, weekly, interviews, status
 scripts/common.py              modelo de vacante, filtro, dedup, helpers
-scripts/create_tracker.py      crea el tracker vacío
+scripts/create_tracker.py      crea el tracker vacío (lo usa radar.py setup)
 scripts/fetch_jobs.py          un fetcher por tipo de fuente
 scripts/update_excel.py        escritura al tracker + carga manual
 scripts/write_job_notes.py     una nota por vacante en el vault
@@ -156,7 +197,7 @@ scripts/notify.py              Telegram: vacantes nuevas, resumen semanal, fuent
 scripts/fetch_interviews.py    posts de foros sobre entrevistas
 scripts/extract_interviews.py  Groq extrae preguntas / live coding / proyectos en JSON
 scripts/update_obsidian.py     regenera las notas de Radar/
-run_*.bat, find_python.bat     lo que ejecuta Task Scheduler
+run_*.bat, find_python.bat     envoltorios para Task Scheduler (llaman a radar.py --log)
 data/                          estado local (vistas, cola, salud de fuentes, log); no se versiona
 obsidian_vault/                vault; solo se escriben Radar/ (se regenera) y Vacantes/ (solo agrega)
 ```

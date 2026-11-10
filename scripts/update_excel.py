@@ -117,7 +117,18 @@ def job_to_row(job: Job) -> list[str]:
     ]
 
 
-def append_jobs(jobs: list[Job], dry_run: bool = False) -> int:
+def alert_tracker_locked(count: int) -> None:
+    """A scheduled run cannot ask anyone to close Excel: say it on Telegram.
+    Nothing was marked as seen, so the next run fetches the same postings."""
+    try:
+        import notify
+        notify.send(f"⚠️ <b>job-radar</b>: no pude guardar el tracker porque está abierto en Excel. "
+                    f"Cerralo: {count} vacante(s) nueva(s) se reintentan en la próxima corrida.")
+    except SystemExit as exc:  # no .env or Telegram down: the log line above is all we can do
+        print(f"  telegram: {exc}", file=sys.stderr)
+
+
+def append_jobs(jobs: list[Job], dry_run: bool = False, alert_if_locked: bool = True) -> int:
     if not jobs:
         print("nothing to append")
         return 0
@@ -155,6 +166,8 @@ def append_jobs(jobs: list[Job], dry_run: bool = False) -> int:
         wb.save(TRACKER_PATH)
     except PermissionError:
         print("cannot save: close the tracker in Excel/LibreOffice and run again", file=sys.stderr)
+        if alert_if_locked:
+            alert_tracker_locked(len(jobs))
         return 1
 
     seen = load_seen()
@@ -200,7 +213,7 @@ def main() -> int:
         if job.is_seen(set(load_seen()) | tracker_keys()):
             print("already in the tracker (same link or same title/company/source)", file=sys.stderr)
             return 1
-        return append_jobs([job], dry_run=args.dry_run)
+        return append_jobs([job], dry_run=args.dry_run, alert_if_locked=False)  # the user is right here
 
     jobs = load_pending()
     code = append_jobs(jobs, dry_run=args.dry_run)
