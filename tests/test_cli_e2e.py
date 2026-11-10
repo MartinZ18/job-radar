@@ -80,7 +80,7 @@ class RunThroughCli(chain.InternshipsE2E):
         self.assertFalse(list(self.notes.glob("*.md")) if self.notes.exists() else [])
 
         self.run_chain()  # closed again: the same postings go in now
-        self.assertEqual(len(self.rows()), 14)
+        self.assertEqual(len(self.rows()), 15)
         self.assertEqual(len(self.sent), 2)
         self.assertIn("Pasante Python Backend Developer", self.sent[1])
 

@@ -78,7 +78,9 @@ GOB_ITEMS = [
     gob_item("junior-chile", "Junior Backend Santiago", remote="hybrid", countries=["Chile"]),
     gob_item("junior-ba", "Junior Java Developer", remote="no_remote", countries=["Argentina"]),
     gob_item("junior-mendoza", "Junior Full-Stack Mendoza", remote="hybrid", countries=["Argentina"]),
-    gob_item("junior-body-excluded", "Backend Developer Junior", body="Reportarás a un senior"),
+    # A junior posting that mentions a senior is still junior; "senior" in the title always drops it.
+    gob_item("junior-reports-to-senior", "Backend Developer Junior", body="Reportarás a un senior"),
+    gob_item("senior-title", "Senior Backend Developer", body="Equipo con perfiles junior"),
     gob_item("freelance", "Python Developer", modality=3),
 ]
 
@@ -179,7 +181,7 @@ class InternshipsE2E(unittest.TestCase):
             "Pasante Analista IA",  # already in the tracker: not added twice
             "Analista de Datos", "Trainee Python", "Junior Python Developer", "Python Developer",
             "Pasante Python", "Trainee Datos Mendoza", "Pasante Backend Remoto", "Junior Full-Stack Mendoza",
-            "Analista Python Junior",
+            "Analista Python Junior", "Backend Developer Junior",
             "Pasante Python Backend Developer", "Pasante DBA SQL",
             "Pasante de Desarrollo Backend e IA", "Propuesta directa",
         })

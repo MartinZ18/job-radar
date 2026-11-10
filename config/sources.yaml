@@ -142,8 +142,6 @@ filter:
     - '\bfor hire\b'
     - '^how to\b'                       # forum discussions, not postings
     - 'looking to connect'
-    - '(?<!semi[- ])(?<!semi)senior'   # senior, but not semi senior / semi-senior
-    - '\bsr\.? \w+ (developer|engineer)'
     - '\blead\b'
     - '\bstaff\b'
     - '\bprincipal\b'
@@ -151,6 +149,12 @@ filter:
     - 'front[- ]?end developer|\bui/ux\b|dise[nñ]ador|designer|\bqa\b|data (entry|analyst|scientist)|business intelligence|power bi'
     - 'contact center|voice (artist|actor|recording)|annotat|grabaci[oó]n|filmmaker|procurement|merchandising|assistant|sales|marketing|manager|director'
     - 'don.t see an open position|mobile|android|ios developer|flutter'
+  # Senior roles. In the title they always drop the posting. In the body they drop it
+  # unless the posting already reads as junior: "under the guidance of senior engineers"
+  # or "Junior/Middle/Senior" are junior jobs (audit of 764 real postings, 2026-11).
+  senior:
+    - '(?<!semi[- ])(?<!semi)senior'   # senior, but not semi senior / semi-senior
+    - '\bsr\.? \w+ (developer|engineer)'
   # Checked against the TITLE only: a body saying "vas a tener un mentor" must not sink a posting.
   exclude_title:
     - 'mechanical|\bcivil\b|chemical|\bcfd\b|industrial|electrical engineer'   # engineering, not software

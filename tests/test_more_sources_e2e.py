@@ -198,6 +198,21 @@ class MoreSourcesE2E(unittest.TestCase):
         titles = {t for (src, t) in self.rows() if src == "Himalayas"}
         self.assertEqual(titles, set(keep))
 
+    def test_senior_in_the_body(self):
+        """Cases from the 2026-11 audit of 764 real postings."""
+        def body(slug, title, text):
+            return {**him(slug, title, [], seniority=[]), "description": f"<p>{text}</p>"}
+        pages = {("python", 1): [
+            body("s1", "Junior Software Engineer", "Maintain clean code under the guidance of senior engineers."),
+            body("s2", "Backend Engineer", "Backend Engineer (Junior/Middle/Senior). Python and APIs."),
+            body("s3", "Backend Developer", "About the role: as a Senior Backend Engineer you'll design APIs."),
+            body("s4", "Software Engineer Position - React and Rest", "We are seeking a highly skilled Senior Software Engineer."),
+        ]}
+        with mock.patch.dict(HIM_PAGES, pages, clear=True):
+            self.run_chain()
+        titles = {t for (src, t) in self.rows() if src == "Himalayas"}
+        self.assertEqual(titles, {"Junior Software Engineer", "Backend Engineer"})
+
     def test_second_run_adds_nothing(self):
         self.run_chain()
         before = self.rows()
